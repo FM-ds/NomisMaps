@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Nomis Map test</title>
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite-api@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+
+<body>
+
+
+    <script>
+
+        const nomisRoot = "http://www.nomisweb.co.uk"
+
+        let datasetId = "NM_17"
+
+        async function getDatasetDimensions(datasetId) {
+            // Fetch the dataset definition to get the dimensions, returns an array of objects with the dimension ID and name with the time dimension first
+
+            const url = `https://www.nomisweb.co.uk/api/v01/dataset/${datasetId}.def.sdmx.json`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                const dimensions = data.structure.keyfamilies.keyfamily[0].components.dimension;
+
+                const dimensionsList = dimensions.map(d => ({
+                    id: d.codelist,
+                    name: d.conceptref,
+                }));
+
+                const timeDimension = data.structure.keyfamilies.keyfamily[0].components.timedimension
+                dimensionsList.unshift({
+                    id: timeDimension.codelist,
+                    name: timeDimension.conceptref,
+                });
+
+                return dimensionsList;
+            } catch (error) {
+                console.error(`Could not get dataset dimensions: ${error}`);
+                return []; // Return an empty array in case of an error
+            }
+        }
+
+        async function getCodeListOptions(codeListId) {
+            const url = `https://www.nomisweb.co.uk/api/v01/codelist/${codeListId}.def.sdmx.json`;
+            console.log(url);
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Navigate the response object to extract the code list options
+                // Assuming the code list options are located in a structure similar to your previous response
+                const codes = data.structure.codelists.codelist[0].code || [];
+
+                // Parse into a JSON list
+                const optionsList = codes.map(code => ({
+                    code: code.value,
+                    description: code.description['#text'] || code.description // Adjust based on the actual response structure
+                }));
+
+                return optionsList;
+            } catch (error) {
+                console.error(`Could not get code list options: ${error}`);
+                return []; // Return an empty array in case of an error
+            }
+        }
+
+
+        // Usage:
+        // Replace 'NM_17' with your actual dataset ID
+        getDatasetDimensions('NM_17').then(dimensions => {
+
+            // the time dimension is the first one
+            // add a start and end dropdown for the time dimension
+            const timeSection = d3.select('body').append('section').attr('id', 'time')
+
+            timeSection.append('h2').text(dimensions[0].name)
+
+            getCodeListOptions(dimensions[0].id).then(options => {
+                // make a start and end dropdown
+                timeSection.append('select').attr('id', 'start')
+                timeSection.append('select').attr('id', 'end')
+
+                d3.selectAll('select').selectAll('option')
+                    .data(options)
+                    .enter()
+                    .append('option')
+                    .attr('value', d => JSON.stringify(d))
+                    .text(d => d.description.value)
+            });
+
+            console.log(dimensions);
+            dimensions.slice(1).forEach(async dimension => {
+                let dimensionSection = d3.select('body').append('section')
+                    .attr('id', dimension.name)
+                dimensionSection.append('h2').text(dimension.name)
+                getCodeListOptions(dimension.id).then(options => {
+                    // add tickboxes for each option
+                    dimensionDivs = dimensionSection.selectAll('div')
+                        .data(options)
+                        .enter()
+                        .append('div')
+
+                    dimensionDivs.append('input')
+                        .attr('type', 'checkbox')
+                        .attr('id', d => d.code)
+                        .attr('value', d => JSON.stringify(d))
+                        .attr('name', dimension.name)
+                        .attr('checked', true)
+                    
+                    dimensionDivs.append('label')
+                        .attr('for', d => d.code)
+                        .text(d => d.description.value)
+
+
+                });
+
+            });
+        });
+
+
+
+
+
+    </script>
+</body>
+
+</html>

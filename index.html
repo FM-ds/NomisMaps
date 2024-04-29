@@ -2,141 +2,150 @@
 <html>
 
 <head>
-    <meta charset="utf-8">
-    <title>Nomis Map test</title>
+    <title>Nomis Map Builder</title>
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite-api@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-</head>
 
-<body>
+    <script type="text/javascript">
 
 
-    <script>
+        nomis_url = "https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?MEASURES=20599&geography=1811939329...1811939332,1811939334...1811939336,1811939338...1811939428,1811939436...1811939442,1811939768,1811939769,1811939443...1811939497,1811939499...1811939501,1811939503,1811939505...1811939507,1811939509...1811939517,1811939519,1811939520,1811939524...1811939570,1811939575...1811939599,1811939601...1811939628,1811939630...1811939634,1811939636...1811939647,1811939649,1811939655...1811939664,1811939667...1811939680,1811939682,1811939683,1811939685,1811939687...1811939704,1811939707,1811939708,1811939710,1811939712...1811939717,1811939719,1811939720,1811939722...1811939730&date=latestMINUS72,latestMINUS68,latestMINUS64,latestMINUS60,latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=83&measures=20599,21001,21002,21003&select=DATE,GEOGRAPHY_NAME,GEOGRAPHY_CODE,OBS_VALUE,MEASURES_NAME"
 
-        const nomisRoot = "http://www.nomisweb.co.uk"
+        function getCSVLength(csv_str) {
+            csv_str = String(csv_str);
+            return csv_str.split("\n").length;
+        }
 
-        let datasetId = "NM_17"
+        async function fetchAllData(dataUrl) {
+            let offset = 0;
+            let allData = "";
+            let continueFetching = true;
 
-        async function getDatasetDimensions(datasetId) {
-            // Fetch the dataset definition to get the dimensions, returns an array of objects with the dimension ID and name with the time dimension first
-
-            const url = `https://www.nomisweb.co.uk/api/v01/dataset/${datasetId}.def.sdmx.json`;
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            while (continueFetching) {
+                const chunk = await fetchData(dataUrl, offset);
+                console.log(`Chunk length: ${getCSVLength(chunk)}`);
+                if (chunk) {
+                    // remove the header row if it's not the first chunk
+                    // if (offset > 0) {
+                    //     chunk = chunk.split("\n").slice(1).join("\n");
+                    // }
+                    allData += chunk;
+                    //console.log(`Chunk ${offset/25000} fetched: ${getCSVLength(chunk)} rows`);
+                    offset += 25000; // Increment offset by the chunk size
+                    continueFetching = getCSVLength(chunk) > 20000; // Continue fetching if data returned
+                } else {
+                    continueFetching = false; // Stop fetching if no data returned
                 }
-                const data = await response.json();
+            }
 
-                const dimensions = data.structure.keyfamilies.keyfamily[0].components.dimension;
+            return allData;
+        }
 
-                const dimensionsList = dimensions.map(d => ({
-                    id: d.codelist,
-                    name: d.conceptref,
-                }));
+        async function fetchData(dataUrl, offset) {
+            try {
+                console.log(`${dataUrl}&RecordOffset=${offset}`);
+                // Make a request to the API with the specified offset
+                const response = await fetch(`${dataUrl}&RecordOffset=${offset}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
 
-                const timeDimension = data.structure.keyfamilies.keyfamily[0].components.timedimension
-                dimensionsList.unshift({
-                    id: timeDimension.codelist,
-                    name: timeDimension.conceptref,
+                // Retrieve the text data from the response (CSV format assumed)
+                const csvText = await response.text();
+
+                return csvText;
+            } catch (error) {
+                console.error('Failed to fetch data:', error);
+                return []; // Return empty array in case of error
+            }
+        }
+
+        // let params = {
+        //     "geo_data": {
+        //         "vega" 
+        //     }
+        // }
+
+        function prepDataForVega(CSVData) {
+            // Uses d3 to parse the CSV data, rename the columns, and return the data, again in a CSV format
+
+            // Parse the CSV data
+            let parsedData = d3.csvParse(CSVData);
+
+            // Rename the columns
+            rebinds = {
+                "DATE": "date",
+                "GEOGRAPHY_NAME": "geo_name",
+                "GEOGRAPHY_CODE": "geo_id",
+                "OBS_VALUE": "value",
+                "MEASURES_NAME": "measure"
+            }
+
+            // Rename the columns
+            let renamedData = parsedData.map(d => {
+                let renamed = {};
+                for (let key in rebinds) {
+                    renamed[rebinds[key]] = d[key];
+                }
+                return renamed;
+            });
+
+            // only keep measures_name = "Variable"
+            let filteredData = renamedData.filter(d => d.measure == "Variable");
+
+
+            // if there's a date, parse it
+            if (filteredData[0].date) {
+                filteredData.forEach(d => {
+                    d.date = new Date(d.date);
                 });
-
-                return dimensionsList;
-            } catch (error) {
-                console.error(`Could not get dataset dimensions: ${error}`);
-                return []; // Return an empty array in case of an error
             }
-        }
 
-        async function getCodeListOptions(codeListId) {
-            const url = `https://www.nomisweb.co.uk/api/v01/codelist/${codeListId}.def.sdmx.json`;
-            console.log(url);
+            // Convert the data back to CSV format
+            let csvData = d3.csvFormat(filteredData);
 
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
 
-                // Navigate the response object to extract the code list options
-                // Assuming the code list options are located in a structure similar to your previous response
-                const codes = data.structure.codelists.codelist[0].code || [];
+            return csvData;
 
-                // Parse into a JSON list
-                const optionsList = codes.map(code => ({
-                    code: code.value,
-                    description: code.description['#text'] || code.description // Adjust based on the actual response structure
-                }));
-
-                return optionsList;
-            } catch (error) {
-                console.error(`Could not get code list options: ${error}`);
-                return []; // Return an empty array in case of an error
-            }
         }
 
 
-        // Usage:
-        // Replace 'NM_17' with your actual dataset ID
-        getDatasetDimensions('NM_17').then(dimensions => {
+        // Example usage:
+        csvData = fetchAllData(nomis_url).then(
+            data => {
 
-            // the time dimension is the first one
-            // add a start and end dropdown for the time dimension
-            const timeSection = d3.select('body').append('section').attr('id', 'time')
+                data = prepDataForVega(data);
 
-            timeSection.append('h2').text(dimensions[0].name)
+                // add a download link to the page
+                const downloadLink = d3.select('body').append('a')
+                    .attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(data))
+                    .attr('download', 'data.csv')
+                    .text('Download CSV');
 
-            getCodeListOptions(dimensions[0].id).then(options => {
-                // make a start and end dropdown
-                timeSection.append('select').attr('id', 'start')
-                timeSection.append('select').attr('id', 'end')
-
-                d3.selectAll('select').selectAll('option')
-                    .data(options)
+                foo = data
+                // List the columns
+                const columns = data.split("\n")[0].split(",");
+                // add the columns to the page
+                const columnDiv = d3.select('body').append('div').attr('id', 'columns');
+                columnDiv.append('h2').text('Columns');
+                columnDiv.selectAll('div')
+                    .data(columns)
                     .enter()
-                    .append('option')
-                    .attr('value', d => JSON.stringify(d))
-                    .text(d => d.description.value)
-            });
-
-            console.log(dimensions);
-            dimensions.slice(1).forEach(async dimension => {
-                let dimensionSection = d3.select('body').append('section')
-                    .attr('id', dimension.name)
-                dimensionSection.append('h2').text(dimension.name)
-                getCodeListOptions(dimension.id).then(options => {
-                    // add tickboxes for each option
-                    dimensionDivs = dimensionSection.selectAll('div')
-                        .data(options)
-                        .enter()
-                        .append('div')
-
-                    dimensionDivs.append('input')
-                        .attr('type', 'checkbox')
-                        .attr('id', d => d.code)
-                        .attr('value', d => JSON.stringify(d))
-                        .attr('name', dimension.name)
-                        .attr('checked', true)
-                    
-                    dimensionDivs.append('label')
-                        .attr('for', d => d.code)
-                        .text(d => d.description.value)
-
-
-                });
-
-            });
-        });
-
+                    .append('div')
+                    .text(d => d);
+            }
+        );
 
 
 
 
     </script>
+</head>
+
+<body>
+    <div id="table_div"></div>
 </body>
 
 </html>
