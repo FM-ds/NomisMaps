@@ -6,8 +6,17 @@
     <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite-api@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
 
+        body {
+            font-family: Helvetica-Neue, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+    </style>
     <script type="text/javascript">
 
 
@@ -61,13 +70,7 @@
                 return []; // Return empty array in case of error
             }
         }
-
-        // let params = {
-        //     "geo_data": {
-        //         "vega" 
-        //     }
-        // }
-
+        
         function prepDataForVega(CSVData) {
             // Uses d3 to parse the CSV data, rename the columns, and return the data, again in a CSV format
 
@@ -111,6 +114,64 @@
 
         }
 
+        function prepSpec(data, params) {
+            return {
+                "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                "data": {
+                    "values": data,
+                    "format": { "type": "csv" }
+                },
+                "params": [
+                    {
+                        "name": "selectedYear",
+                        "value": 2019,
+                        "bind": {
+                            "input": "range",
+                            "min": 2013,
+                            "name": "Year",
+                            "max": 2021,
+                            "step": 1
+                        }
+                    }
+                ],
+                "title": {
+                    "text": params.title,
+                    "subtitle": ["Source: Nomis"],
+                    "anchor": "start",
+                    "subtitleFontWeight": "lighter"
+                },
+                "transform": [
+                    { "filter": "year(datum.date) == selectedYear" },
+                    {
+                        "lookup": "geo_id",
+                        "from": {
+                            "key": "properties.geo_id",
+                            "fields": ["properties", "type", "geometry"],
+                            "data": {
+                                "url": params.geo_data_url,
+                                "format": { "type": "json" }
+                            }
+                        }
+                    }
+                ],
+                "width": 300,
+                "height": 500,
+                "layer": [
+                    {
+                        "mark": { "type": "geoshape" },
+                        "encoding": {
+                            "color": {
+                                "scale": { "scheme": "yellowgreenblue" },
+                                "field": "value",
+                                "type": "quantitative",
+                                "legend": { "title": null }
+                            },
+                            "tooltip": [{ "field": "geo_name", "title": "name" }, { "field": "value" }]
+                        }
+                    }
+                ]
+            }
+        }
 
         // Example usage:
         csvData = fetchAllData(nomis_url).then(
@@ -135,8 +196,20 @@
                     .enter()
                     .append('div')
                     .text(d => d);
+
+                // generate a vega-lite spec
+                const spec = prepSpec(data, {
+                    title: "Nomis Data",
+                    geo_data_url: "https://raw.githubusercontent.com/FM-ds/NomisMaps/main/geoData/cleaned/lad.geoJSON"
+                });
+
+                // Embed the spec with vega-lite embed
+                d3.select('body').append('figure').attr('id', 'vis');
+                vegaEmbed('#vis', spec);
+
             }
         );
+
 
 
 
