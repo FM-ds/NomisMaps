@@ -9,18 +9,60 @@
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <style>
-
         body {
             font-family: Helvetica-Neue, Helvetica, Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
+            color: whitesmoke;
+            background-color: rgb(27, 42, 55);
         }
-
     </style>
+
+<body>
+
+    <h1>Nomis Map Builder</h1>
+    <div id="params">
+        <!-- Inputs for Title, Subtitle, URL and Colour Scheme -->
+        <label for="title">Title:</label>
+        <input type="text" id="title" name="title" value="Unemployment (16+)"><br><br>
+
+        <label for="subtitle">Subtitle:</label>
+        <input type="text" id="subtitle" name="subtitle" value="Source: Nomis"><br><br>
+
+        <label for="url">URL:</label>
+        <input type="url" id="url" name="url"
+            value="https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?MEASURES=20599&geography=1811939329...1811939332,1811939334...1811939336,1811939338...1811939428,1811939436...1811939442,1811939768,1811939769,1811939443...1811939497,1811939499...1811939501,1811939503,1811939505...1811939507,1811939509...1811939517,1811939519,1811939520,1811939524...1811939570,1811939575...1811939599,1811939601...1811939628,1811939630...1811939634,1811939636...1811939647,1811939649,1811939655...1811939664,1811939667...1811939680,1811939682,1811939683,1811939685,1811939687...1811939704,1811939707,1811939708,1811939710,1811939712...1811939717,1811939719,1811939720,1811939722...1811939730&date=latestMINUS72,latestMINUS68,latestMINUS64,latestMINUS60,latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=83&measures=20599,21001,21002,2100"><br><br>
+
+        <label for="colorScheme">Color Scheme:</label>
+        <!-- multiselect dropdown for scheme -->
+        <select id="colorScheme" name="colorScheme" value="darkblue">
+        </select><br><br>
+
+        <button onclick="makeChart()">Make Chart</button>
+
+    </div>
+
+    <div id="table_div"></div>
+
     <script type="text/javascript">
 
+        schemes = [ 'accent', 'category10', 'category20', 'category20b', 'category20c', 'observable10', 'dark2', 'paired', 'pastel1', 'pastel2', 'set1', 'set2', 'set3', 'tableau10', 'tableau20', 'blues', 'tealblues', 'teals', 'greens', 'browns', 'oranges', 'reds', 'purples', 'warmgreys', 'greys', 'viridis', 'magma', 'inferno', 'plasma', 'cividis', 'turbo', 'bluegreen', 'bluepurple', 'goldgreen', 'goldorange', 'goldred', 'greenblue', 'orangered', 'purplebluegreen', 'purpleblue', 'purplered', 'redpurple', 'yellowgreenblue', 'yellowgreen', 'yelloworangebrown', 'yelloworangered', 'darkblue', 'darkgold', 'darkgreen', 'darkmulti', 'darkred', 'lightgreyred', 'lightgreyteal', 'lightmulti', 'lightorange', 'lighttealblue', 'blueorange', 'brownbluegreen', 'purplegreen', 'pinkyellowgreen', 'purpleorange', 'redblue', 'redgrey', 'redyellowblue', 'redyellowgreen', 'spectral', 'rainbow', 'sinebow']
 
-        nomis_url = "https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?MEASURES=20599&geography=1811939329...1811939332,1811939334...1811939336,1811939338...1811939428,1811939436...1811939442,1811939768,1811939769,1811939443...1811939497,1811939499...1811939501,1811939503,1811939505...1811939507,1811939509...1811939517,1811939519,1811939520,1811939524...1811939570,1811939575...1811939599,1811939601...1811939628,1811939630...1811939634,1811939636...1811939647,1811939649,1811939655...1811939664,1811939667...1811939680,1811939682,1811939683,1811939685,1811939687...1811939704,1811939707,1811939708,1811939710,1811939712...1811939717,1811939719,1811939720,1811939722...1811939730&date=latestMINUS72,latestMINUS68,latestMINUS64,latestMINUS60,latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=83&measures=20599,21001,21002,21003&select=DATE,GEOGRAPHY_NAME,GEOGRAPHY_CODE,OBS_VALUE,MEASURES_NAME"
+        schemes = schemes.sort()
+
+        d3.select('#colorScheme').selectAll('option')
+            .data(schemes)
+            .enter()
+            .append('option')
+            .attr('value', d => d)
+            .text(d => d);
+
+        // start with darkmulti selected
+        d3.select('#colorScheme').property('value', 'darkmulti');
+
+        nomis_url = "https://www.nomisweb.co.uk/api/v01/dataset/NM_17_5.data.csv?MEASURES=20599&geography=1811939329...1811939332,1811939334...1811939336,1811939338...1811939428,1811939436...1811939442,1811939768,1811939769,1811939443...1811939497,1811939499...1811939501,1811939503,1811939505...1811939507,1811939509...1811939517,1811939519,1811939520,1811939524...1811939570,1811939575...1811939599,1811939601...1811939628,1811939630...1811939634,1811939636...1811939647,1811939649,1811939655...1811939664,1811939667...1811939680,1811939682,1811939683,1811939685,1811939687...1811939704,1811939707,1811939708,1811939710,1811939712...1811939717,1811939719,1811939720,1811939722...1811939730&date=latestMINUS72,latestMINUS68,latestMINUS64,latestMINUS60,latestMINUS56,latestMINUS52,latestMINUS48,latestMINUS44,latestMINUS40,latestMINUS36,latestMINUS32,latestMINUS28,latestMINUS24,latestMINUS20,latestMINUS16,latestMINUS12,latestMINUS8,latestMINUS4,latest&variable=83&measures=20599,21001,21002,2100"
+
+        nomis_url = nomis_url + "&select=DATE,GEOGRAPHY_NAME,GEOGRAPHY_CODE,OBS_VALUE,MEASURES_NAME"
 
         function getCSVLength(csv_str) {
             csv_str = String(csv_str);
@@ -70,7 +112,7 @@
                 return []; // Return empty array in case of error
             }
         }
-        
+
         function prepDataForVega(CSVData) {
             // Uses d3 to parse the CSV data, rename the columns, and return the data, again in a CSV format
 
@@ -106,11 +148,18 @@
                 });
             }
 
+            // get the extent of the value column
+            let valueExtent = d3.extent(filteredData, d => d.value);
+            stats = {
+                "min": valueExtent[0],
+                "max": valueExtent[1]
+            }
+
             // Convert the data back to CSV format
             let csvData = d3.csvFormat(filteredData);
 
 
-            return csvData;
+            return [stats, csvData];
 
         }
 
@@ -118,8 +167,8 @@
             return {
                 "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
                 "data": {
-                    "values": data,
-                    "format": { "type": "csv" }
+                    "format": { "type": "csv" },
+                    "values": data
                 },
                 "params": [
                     {
@@ -129,15 +178,21 @@
                             "input": "range",
                             "min": 2013,
                             "name": "Year",
-                            "max": 2021,
+                            "max": 2023,
                             "step": 1
                         }
                     }
                 ],
+                "config": {
+                    "title": { "color": "rgb(165,165,165)", "subtitleColor": "rgb(165,165,165)" },
+                    "legend": { "labelColor": "rgb(165,165,165)" }
+                },
                 "title": {
                     "text": params.title,
-                    "subtitle": ["Source: Nomis"],
+                    "subtitle": [params.subtitle],
                     "anchor": "start",
+                    "fontSize": 20,
+                    "subtitleFontSize": 14,
                     "subtitleFontWeight": "lighter"
                 },
                 "transform": [
@@ -148,77 +203,111 @@
                             "key": "properties.geo_id",
                             "fields": ["properties", "type", "geometry"],
                             "data": {
-                                "url": params.geo_data_url,
+                                "url": "https://raw.githubusercontent.com/FM-ds/NomisMaps/main/geoData/cleaned/lad.geoJSON",
                                 "format": { "type": "json" }
                             }
                         }
                     }
                 ],
-                "width": 300,
-                "height": 500,
+                "width": 500,
+                "height": 800,
+                "background": "rgba(0,0,0,0)",
                 "layer": [
                     {
                         "mark": { "type": "geoshape" },
+                        "encoding": { "color": { "value": "rgb(166,166,166)" } }
+                    },
+                    {
+                        "transform": [{ "filter": "datum.value != ''" }],
+                        "mark": { "type": "geoshape" },
                         "encoding": {
+                            "order": { "field": "value" },
                             "color": {
-                                "scale": { "scheme": "yellowgreenblue" },
+                                "scale": { 
+                                    "scheme": params.colorScheme,
+                                    "domain": [params.stats.min, params.stats.max],
+                                },
                                 "field": "value",
                                 "type": "quantitative",
                                 "legend": { "title": null }
                             },
                             "tooltip": [{ "field": "geo_name", "title": "name" }, { "field": "value" }]
                         }
+                    },
+                    {
+                        "mark": { "type": "text", "color": "whitesmoke", "stroke": "black", "strokeWidth": 0.15, "strokeOpacity": 0.25, "strokeOffset": 0 },
+                        "data": {
+                            "url": "https://raw.githubusercontent.com/FM-ds/NomisMaps/main/geoData/cleaned/uk_cities.csv"
+                        },
+                        "transform": [{ "filter": "datum.gb == 1 && datum.rank < 10" }],
+                        "encoding": {
+                            "latitude": { "field": "lat" },
+                            "longitude": { "field": "lng" },
+                            "size": {
+                                "field": "population",
+                                "scale": { "range": [9, 12], "type": "quantile" },
+                                "legend": null
+                            },
+                            "text": { "field": "city" }
+                        }
                     }
                 ]
             }
         }
 
-        // Example usage:
-        csvData = fetchAllData(nomis_url).then(
-            data => {
+        makeChart = async function () {
 
-                data = prepDataForVega(data);
+            // Get the params from the form
+            const title = d3.select('#title').property('value');
+            const subtitle = d3.select('#subtitle').property('value');
+            const url = d3.select('#url').property('value');
+            const colorScheme = d3.select('#colorScheme').property('value');
 
-                // add a download link to the page
-                const downloadLink = d3.select('body').append('a')
-                    .attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(data))
-                    .attr('download', 'data.csv')
-                    .text('Download CSV');
+            nomis_url = url + "&select=DATE,GEOGRAPHY_NAME,GEOGRAPHY_CODE,OBS_VALUE,MEASURES_NAME"
 
-                foo = data
-                // List the columns
-                const columns = data.split("\n")[0].split(",");
-                // add the columns to the page
-                const columnDiv = d3.select('body').append('div').attr('id', 'columns');
-                columnDiv.append('h2').text('Columns');
-                columnDiv.selectAll('div')
-                    .data(columns)
-                    .enter()
-                    .append('div')
-                    .text(d => d);
+            csvData = fetchAllData(nomis_url).then(
+                data => {
 
-                // generate a vega-lite spec
-                const spec = prepSpec(data, {
-                    title: "Nomis Data",
-                    geo_data_url: "https://raw.githubusercontent.com/FM-ds/NomisMaps/main/geoData/cleaned/lad.geoJSON"
-                });
+                    vegaOutput = prepDataForVega(data);
+                    stats = vegaOutput[0];
+                    data = vegaOutput[1];
 
-                // Embed the spec with vega-lite embed
-                d3.select('body').append('figure').attr('id', 'vis');
-                vegaEmbed('#vis', spec);
+                    // add a download link to the page
+                    const downloadLink = d3.select('body').append('a')
+                        .attr('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(data))
+                        .attr('download', 'data.csv')
+                        .text('Download CSV');
 
-            }
-        );
+                    foo = data
+
+                    // generate a vega-lite spec
+                    const spec = prepSpec(data, {
+                        title: title,
+                        subtitle: subtitle,
+                        geo_data_url: "https://raw.githubusercontent.com/FM-ds/NomisMaps/main/geoData/cleaned/lad.geoJSON",
+                        stats: stats,
+                        colorScheme: colorScheme
+                    });
+
+                    // Embed the spec with vega-lite embed
+                    vis_uuid = Math.random().toString(36).substring(7);
+                    d3.select('body').append('figure').attr('id', vis_uuid);
+                    vegaEmbed(`#${vis_uuid}`, spec);
+
+                }
+            );
+        }
+
 
 
 
 
 
     </script>
+
+</body>
 </head>
 
-<body>
-    <div id="table_div"></div>
-</body>
+
 
 </html>
